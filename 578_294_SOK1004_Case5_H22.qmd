@@ -1,0 +1,305 @@
+# Instruksjoner
+
+Denne oppgaven skal løses interaktivt i RStudio ved å legge inn egen kode og kommentarer. Det ferdige dokumentet lagres med kandidatnummeret som navn `[kandidatnummer]_SOK1004_C5_H22.qmd` og lastes opp på deres GitHub-side. Hvis du har kandidatnummer 43, så vil filen hete `43_SOK1004_C5_H22.qmd`. Påse at koden kjører og at dere kan eksportere besvarelsen til pdf. Lever så lenken til GitHub-repositoriumet i Canvas.
+
+# Bakgrunn, læringsmål
+
+I [seminar 3, oppgave 3](https://uit-sok-1004-h22.github.io/seminar/s3.html) leste dere [kapittel 1 i NOU 2015:1](https://uit-sok-1004-h22.github.io/seminar/NOU%202015_%201%20kap%201%20(prod1).pdf) "Produktivitet - grunnlag for vekst og velferd." I denne oppgaven skal vi oppdatere tall brukt i analysen. Gjennom arbeidet vil dere repetere de grunnleggende ferdighetene i bruk av API, `tidyverse` og `ggplot` som vi har arbeidet med gjennom kurset. Dere vil også få anledning til å reflektere rundt sammenhengene i nasjonalregnskapet og å grave litt i statistikkbanken hos SSB.
+
+# Last inn pakker
+
+```{r}
+# output | false
+rm(list=ls()) 
+library(tidyverse)
+library(rjstat)
+library(httr)
+```
+
+# Oppgave I: Timeverksproduktivitet i markedsrettede fastlandsnæringer
+
+Reproduser en oppdatert versjon av Figur 1.1 "Timeverksproduktivitet, markedsrettede fastlandsnæringer" i rapporten. Her er produktivitet målt som bruttoprodukt i markedsrettet produksjon i Fastlands-Norge per timeverk, utenom bolig.
+
+## Oppgave Ia
+
+Hvorfor trekker Produktivitetskommisjon fra produksjonen av boligtjenester, offentlig etterspørsel, og inntekter fra olje og gass når de beregner produktivitet?
+
+1a) Produktivitetskommisjonen trekker fra produksjon av boligtjenester og offentlig sektor fordi disse blir ikke omsatt i markeder og produksjonstallene er derfor stort sett basert på kostnader. Inntekter fra olje og gass er tatt vekk fordi en stor del av produksjonsverdien kan være grunnrente og for å gi et bedre grunnlag for internasjonal sammenlikning.
+
+Enorme og variable verdier, veldig stor vekt av BNP. Det vi gjør i Oljeindustrien er at vi flytter formuen fra olje til finansformue. Vi flytter altså oljeverdi til en annen verdi, vi produserer ikke noe.
+
+## Oppgave Ib
+
+Skriv kode som bruker en JSON-spørring til å lage en oppdatert versjon av figuren, med observasjoner fra 1996 til 2021. Beregn gjennomsnittlig årlig endring for perioden 1996 - 2005 og, 2005-2013, og 2006 - 2021. Står konklusjonen i rapporten seg?
+
+**Merknad.** Det er tidvis store revisjoner i nasjonalregnskapet. Du må regne med at individuelle tall på årlig endring kan avvike en god del, opp til et halvt prosentpoeng, mens de gjennomsnittlige veksttallene burde avvike noe mindre.
+
+**Tips:** Du henter data på timeverk og bruttoprodukt fra henholdsvis tabell 09174 og 09170.
+
+Timeverk fra 09174 og Bruttoprodukt fra 09170.
+
+```{r}
+#url-link til tabell 70
+url <- "https://data.ssb.no/api/v0/no/table/09170/"
+
+query <- '{
+  "query": [
+    {
+      "code": "NACE",
+      "selection": {
+        "filter": "vs:NRNaeringPubAgg",
+        "values": [
+          "pub2X68B",
+          "nr23fn"
+        ]
+      }
+    },
+    {
+      "code": "ContentsCode",
+      "selection": {
+        "filter": "item",
+        "values": [
+          "BNPB2"
+        ]
+      }
+    },
+    {
+      "code": "Tid",
+      "selection": {
+        "filter": "item",
+        "values": [
+          "1996",
+          "1997",
+          "1998",
+          "1999",
+          "2000",
+          "2001",
+          "2002",
+          "2003",
+          "2004",
+          "2005",
+          "2006",
+          "2007",
+          "2008",
+          "2009",
+          "2010",
+          "2011",
+          "2012",
+          "2013",
+          "2014",
+          "2015",
+          "2016",
+          "2017",
+          "2018",
+          "2019",
+          "2020",
+          "2021"
+        ]
+      }
+    }
+  ],
+  "response": {
+    "format": "json-stat2"
+  }
+}'
+
+hent_indeks.tmp <- url %>%
+  POST(body = query, encode = "json")
+
+
+df70 <-  hent_indeks.tmp %>%
+  content("text") %>%
+  fromJSONstat() %>%
+  as_tibble()
+
+
+```
+
+```{r}
+df70_wider <- df70 %>%
+  pivot_wider(names_from = næring, values_from = value)
+
+  names(df70_wider) <- c("statistikkvariabel", "år",
+                         "Boligtjenester",
+                         "Markedsrettet_fastland_total")
+  
+  df70_wider <- df70_wider %>%
+    mutate("Markedsrettet_uten_bolig" = 
+             Markedsrettet_fastland_total - Boligtjenester)
+```
+
+```{r}
+url <- "https://data.ssb.no/api/v0/no/table/09174/"
+
+query <- '{
+  "query": [
+    {
+      "code": "NACE",
+      "selection": {
+        "filter": "vs:NRNaeringPubAgg",
+        "values": [
+          "pub2X68B",
+          "nr23fn"
+        ]
+      }
+    },
+    {
+      "code": "ContentsCode",
+      "selection": {
+        "filter": "item",
+        "values": [
+          "Timeverk"
+        ]
+      }
+    },
+    {
+      "code": "Tid",
+      "selection": {
+        "filter": "item",
+        "values": [
+          "1996",
+          "1997",
+          "1998",
+          "1999",
+          "2000",
+          "2001",
+          "2002",
+          "2003",
+          "2004",
+          "2005",
+          "2006",
+          "2007",
+          "2008",
+          "2009",
+          "2010",
+          "2011",
+          "2012",
+          "2013",
+          "2014",
+          "2015",
+          "2016",
+          "2017",
+          "2018",
+          "2019",
+          "2020",
+          "2021"
+        ]
+      }
+    }
+  ],
+  "response": {
+    "format": "json-stat2"
+  }
+}'
+
+hent_indeks.tmp <- url %>%
+  POST(body = query, encode = "json")
+
+
+df74 <-  hent_indeks.tmp %>%
+  content("text") %>%
+  fromJSONstat() %>%
+  as_tibble()
+```
+
+```{r}
+df74_wider <- df74 %>%
+  pivot_wider(names_from = næring, values_from = value)
+
+names(df74_wider) <- c("statistikkvariabel_timeverk", "år_timeverk",
+                         "Boligtjenester_timeverk",
+                         "Markedsrettet_fastland_total_timeverk")
+
+```
+
+```{r}
+#Kobler datasettene sammen
+df_total <- cbind(df70_wider, df74_wider) %>%
+  select(-c("år_timeverk", "Boligtjenester",
+            "Markedsrettet_fastland_total",
+            "Boligtjenester_timeverk"))
+
+```
+
+```{r}
+ df_total_wider <- df_total %>%
+   #Lager en kolonne med verdiene til bruttoprodukt med pivotering
+   pivot_wider(names_from = statistikkvariabel,
+              values_from = Markedsrettet_uten_bolig) %>%
+   #Lager en kolonne med verdiene til timeverk med pivotering
+   pivot_wider(names_from = statistikkvariabel_timeverk, 
+               values_from = Markedsrettet_fastland_total_timeverk) 
+  #Funket ikke med rename, men endrer navnene til kolonnene for å enklere     mutate
+ names(df_total_wider) <- c("År", "Bruttoprodukt", "Timeverk")
+ #Mutater ny kolonne med Bruttoprodukt per timeverk
+ df_total_wider <- df_total_wider %>%
+   mutate(Bruttoprodukt_per_timeverk = Bruttoprodukt / Timeverk)
+```
+
+```{r}
+#Setter desimaler til 4
+options(digits = 4)
+#Lager en lag-kolonne for å kunne vise endring etterhvert
+  df_total_lag <- df_total_wider %>%
+    mutate(lag_Brutto_timeverk = lag(Bruttoprodukt_per_timeverk)) %>%
+    mutate(endringsprosent =
+        ((Bruttoprodukt_per_timeverk / lag_Brutto_timeverk)*100)-100)
+```
+
+```{r}
+#Lager figur 
+ggplot(df_total_lag, aes(x = År, y = endringsprosent)) + 
+  geom_bar(stat = "identity", fill = "blue") +
+  scale_x_discrete(breaks = c("1996", "1998", "2000", "2002", "2004",
+                              "2006", "2008", "2010", "2012", "2014",
+                              "2016", "2018", "2020")) 
+
+```
+
+1996 - 2005
+
+```{r}
+#Nytt datasett fra df_total_lag for å lettere regne snitt
+snitt_2005 <- df_total_lag %>%
+  select(År, endringsprosent) %>%
+  filter(År <= 2005) 
+
+snitt_2005[is.na(snitt_2005)] <- 0
+colMeans(snitt_2005[2])
+
+
+```
+
+2005 - 2013
+
+```{r}
+snitt_2013 <- df_total_lag %>%
+  select(År, endringsprosent) %>%
+  filter(År %in% c("2005", "2006", "2007", "2008", "2009", "2010", "2011",
+                    "2012", "2013"))
+
+snitt_2013[is.na(snitt_2013)] <- 0
+colMeans(snitt_2013[2])
+```
+
+2006 - 2021
+
+```{r}
+snitt_2021 <- df_total_lag %>%
+  select(År, endringsprosent) %>%
+  filter(År > 2005)
+
+snitt_2021[is.na(snitt_2021)] <- 0
+colMeans(snitt_2021[2])
+```
+
+Figur med snittlinjer
+
+```{r}
+ggplot(df_total_lag, aes(x = År, y = endringsprosent)) + 
+  geom_bar(stat = "identity", fill = "blue") +
+  scale_x_discrete(breaks = c("1996", "1998", "2000", "2002", "2004",
+                              "2006", "2008", "2010", "2012", "2014",
+                              "2016", "2018", "2020")) +
+  geom_line(data = snitt_2005)
+```
